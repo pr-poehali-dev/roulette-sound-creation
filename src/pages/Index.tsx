@@ -3,142 +3,120 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import Navigation from '@/components/Navigation';
-import RouletteWheel from '@/components/RouletteWheel';
-import BettingTable from '@/components/BettingTable';
+import ParticipantWheel from '@/components/ParticipantWheel';
+import ParticipantForm from '@/components/ParticipantForm';
 import Icon from '@/components/ui/icon';
 
-interface GameHistory {
+interface Participant {
+  id: string;
+  nickname: string;
+  bet: number;
+}
+
+interface GameResult {
   id: number;
-  number: number;
-  color: string;
+  winner: Participant;
   timestamp: Date;
-  win: boolean;
-  amount: number;
+  totalBank: number;
+  participantsCount: number;
 }
 
 export default function Index() {
   const [currentSection, setCurrentSection] = useState('home');
-  const [balance, setBalance] = useState(10000);
-  const [selectedBets, setSelectedBets] = useState<Array<{ type: string; value: number | string; amount: number }>>([]);
-  const [isSpinning, setIsSpinning] = useState(false);
-  const [gameHistory, setGameHistory] = useState<GameHistory[]>([]);
+  const [participants, setParticipants] = useState<Participant[]>([]);
+  const [gameHistory, setGameHistory] = useState<GameResult[]>([]);
   const [leaderboard] = useState([
-    { name: 'Александр К.', score: 125000, wins: 45 },
-    { name: 'Мария С.', score: 98500, wins: 38 },
-    { name: 'Дмитрий П.', score: 87300, wins: 32 },
-    { name: 'Елена В.', score: 76200, wins: 29 },
-    { name: 'Игорь Н.', score: 65400, wins: 25 }
+    { name: 'Александр К.', totalWins: 125000, gamesWon: 45 },
+    { name: 'Мария С.', totalWins: 98500, gamesWon: 38 },
+    { name: 'Дмитрий П.', totalWins: 87300, gamesWon: 32 },
+    { name: 'Елена В.', totalWins: 76200, gamesWon: 29 },
+    { name: 'Игорь Н.', totalWins: 65400, gamesWon: 25 }
   ]);
   const { toast } = useToast();
 
-  const handlePlaceBet = (type: string, value: number | string) => {
-    if (balance < 100) {
-      toast({ title: 'Недостаточно средств', description: 'Пополните баланс', variant: 'destructive' });
-      return;
-    }
-
-    const existingBetIndex = selectedBets.findIndex(b => b.type === type && b.value === value);
+  const handleAddParticipant = (participant: Omit<Participant, 'id'>) => {
+    const newParticipant: Participant = {
+      ...participant,
+      id: Date.now().toString()
+    };
+    setParticipants([...participants, newParticipant]);
     
-    if (existingBetIndex >= 0) {
-      const newBets = [...selectedBets];
-      newBets[existingBetIndex].amount += 100;
-      setSelectedBets(newBets);
-    } else {
-      setSelectedBets([...selectedBets, { type, value, amount: 100 }]);
-    }
-    
-    setBalance(balance - 100);
+    toast({
+      title: 'Участник добавлен',
+      description: `${participant.nickname} со ставкой ${participant.bet} ₽`,
+    });
   };
 
-  const handleClearBets = () => {
-    const totalBets = selectedBets.reduce((sum, bet) => sum + bet.amount, 0);
-    setBalance(balance + totalBets);
-    setSelectedBets([]);
+  const handleRemoveParticipant = (id: string) => {
+    setParticipants(participants.filter(p => p.id !== id));
   };
 
-  const handleSpin = (result: number, color: string) => {
-    setIsSpinning(true);
+  const handleClearAll = () => {
+    setParticipants([]);
+    toast({
+      title: 'Список очищен',
+      description: 'Все участники удалены',
+    });
+  };
+
+  const handleSpinComplete = (winner: Participant) => {
+    const totalBank = participants.reduce((sum, p) => sum + p.bet, 0);
     
-    setTimeout(() => {
-      let totalWin = 0;
-      let hasWin = false;
+    toast({
+      title: '🎉 ПОБЕДИТЕЛЬ!',
+      description: `${winner.nickname} выигрывает ${totalBank.toLocaleString()} ₽!`,
+      className: 'bg-primary text-black font-bold text-lg',
+      duration: 5000,
+    });
 
-      selectedBets.forEach(bet => {
-        if (bet.type === 'number' && bet.value === result) {
-          totalWin += bet.amount * 35;
-          hasWin = true;
-        } else if (bet.type === 'color' && bet.value === color) {
-          totalWin += bet.amount * 2;
-          hasWin = true;
-        } else if (bet.type === 'range') {
-          const [min, max] = (bet.value as string).split('-').map(Number);
-          if (result >= min && result <= max) {
-            totalWin += bet.amount * 2;
-            hasWin = true;
-          }
-        }
-      });
+    const result: GameResult = {
+      id: Date.now(),
+      winner,
+      timestamp: new Date(),
+      totalBank,
+      participantsCount: participants.length
+    };
 
-      if (totalWin > 0) {
-        setBalance(balance + totalWin);
-        toast({
-          title: '🎉 ВЫИГРЫШ!',
-          description: `Вы выиграли ${totalWin} ₽!`,
-          className: 'bg-primary text-black font-bold'
-        });
-      } else {
-        toast({
-          title: 'Не повезло',
-          description: `Выпало: ${result} (${color === 'red' ? 'красное' : color === 'black' ? 'чёрное' : 'зелёное'})`,
-          variant: 'destructive'
-        });
-      }
-
-      setGameHistory([
-        { id: Date.now(), number: result, color, timestamp: new Date(), win: hasWin, amount: totalWin },
-        ...gameHistory.slice(0, 9)
-      ]);
-
-      setSelectedBets([]);
-      setIsSpinning(false);
-    }, 4000);
+    setGameHistory([result, ...gameHistory.slice(0, 19)]);
+    setParticipants([]);
   };
 
   const renderHome = () => (
-    <div className="space-y-8 animate-fade-in">
-      <Card className="bg-card/50 backdrop-blur-sm border-2 border-primary/30">
-        <CardHeader>
-          <CardTitle className="text-3xl text-center text-glow text-primary">
-            🎰 Vegas Roulette 🎰
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="flex justify-between items-center p-4 bg-muted/30 rounded-lg">
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground">Ваш баланс</p>
-              <p className="text-3xl font-bold text-primary">{balance.toLocaleString()} ₽</p>
-            </div>
-            <div className="text-center">
-              <p className="text-sm text-muted-foreground">Сумма ставок</p>
-              <p className="text-2xl font-bold text-secondary">
-                {selectedBets.reduce((sum, bet) => sum + bet.amount, 0).toLocaleString()} ₽
-              </p>
-            </div>
-          </div>
+    <div className="grid lg:grid-cols-3 gap-8 animate-fade-in">
+      <div className="lg:col-span-2 space-y-6">
+        <Card className="bg-card/50 backdrop-blur-sm border-2 border-primary/30">
+          <CardHeader>
+            <CardTitle className="text-3xl text-center text-glow text-primary">
+              🎰 Vegas Roulette 🎰
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <ParticipantWheel 
+              participants={participants}
+              onSpinComplete={handleSpinComplete}
+              disabled={participants.length < 2}
+            />
 
-          <RouletteWheel 
-            onSpin={handleSpin} 
-            disabled={isSpinning || selectedBets.length === 0}
-          />
+            {participants.length < 2 && (
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4 text-center">
+                <p className="text-yellow-200 flex items-center justify-center gap-2">
+                  <Icon name="AlertCircle" size={20} />
+                  Добавьте минимум 2 участника для начала игры
+                </p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
-          <BettingTable
-            selectedBets={selectedBets}
-            onPlaceBet={handlePlaceBet}
-            onClearBets={handleClearBets}
-            disabled={isSpinning}
-          />
-        </CardContent>
-      </Card>
+      <div className="lg:col-span-1">
+        <ParticipantForm
+          participants={participants}
+          onAddParticipant={handleAddParticipant}
+          onRemoveParticipant={handleRemoveParticipant}
+          onClearAll={handleClearAll}
+        />
+      </div>
     </div>
   );
 
@@ -152,27 +130,27 @@ export default function Index() {
           <div>
             <h3 className="text-xl font-bold text-primary mb-2">Как играть</h3>
             <ul className="list-disc list-inside space-y-2">
-              <li>Выберите числа, цвета или диапазоны для ставки</li>
-              <li>Каждая ставка составляет 100 ₽</li>
-              <li>Нажмите кнопку "КРУТИТЬ" для запуска рулетки</li>
-              <li>Если выпадет ваше число/цвет - вы выигрываете!</li>
+              <li>Каждый игрок вводит свой никнейм и размер ставки</li>
+              <li>Минимум 2 участника для запуска розыгрыша</li>
+              <li>Нажмите "КРУТИТЬ РУЛЕТКУ" для старта</li>
+              <li>Победитель забирает весь банк!</li>
             </ul>
           </div>
 
           <div>
-            <h3 className="text-xl font-bold text-primary mb-2">Выплаты</h3>
+            <h3 className="text-xl font-bold text-primary mb-2">Правила розыгрыша</h3>
             <ul className="list-disc list-inside space-y-2">
-              <li><strong>Конкретное число:</strong> ставка × 35</li>
-              <li><strong>Красное/Чёрное:</strong> ставка × 2</li>
-              <li><strong>1-18 / 19-36:</strong> ставка × 2</li>
-              <li><strong>Зелёный 0:</strong> ставка × 35</li>
+              <li>Все участники имеют равные шансы на победу</li>
+              <li>Победитель определяется случайным образом</li>
+              <li>Общий банк = сумма всех ставок участников</li>
+              <li>Победитель получает весь банк целиком</li>
             </ul>
           </div>
 
           <div className="bg-primary/10 border border-primary/30 rounded-lg p-4">
             <p className="text-sm">
               <Icon name="Info" className="inline mr-2" size={16} />
-              <strong>Совет:</strong> Начинайте с простых ставок на цвет, изучайте закономерности!
+              <strong>Важно:</strong> Рулетка использует честный алгоритм случайного выбора. Каждый участник имеет одинаковые шансы!
             </p>
           </div>
         </CardContent>
@@ -206,12 +184,12 @@ export default function Index() {
                   </Badge>
                   <div>
                     <p className="font-bold text-lg text-foreground">{player.name}</p>
-                    <p className="text-sm text-muted-foreground">{player.wins} побед</p>
+                    <p className="text-sm text-muted-foreground">{player.gamesWon} побед</p>
                   </div>
                 </div>
                 <div className="text-right">
                   <p className="text-2xl font-bold text-primary">
-                    {player.score.toLocaleString()} ₽
+                    {player.totalWins.toLocaleString()} ₽
                   </p>
                 </div>
               </div>
@@ -234,45 +212,43 @@ export default function Index() {
         <CardContent>
           {gameHistory.length === 0 ? (
             <p className="text-center text-muted-foreground py-8">
-              История пуста. Сделайте первую ставку!
+              История пуста. Сыграйте первую игру!
             </p>
           ) : (
-            <div className="space-y-2">
+            <div className="space-y-3">
               {gameHistory.map((game) => (
                 <div
                   key={game.id}
-                  className={`flex items-center justify-between p-4 rounded-lg ${
-                    game.win ? 'bg-accent/20 border border-accent/50' : 'bg-muted/30'
-                  }`}
+                  className="p-4 bg-accent/20 border border-accent/50 rounded-lg"
                 >
-                  <div className="flex items-center gap-4">
-                    <div
-                      className="w-12 h-12 rounded-full flex items-center justify-center font-bold text-white border-2 border-primary/50"
-                      style={{
-                        backgroundColor: 
-                          game.color === 'red' ? '#DC143C' : 
-                          game.color === 'black' ? '#1a1a1a' : '#047857'
-                      }}
-                    >
-                      {game.number}
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-3">
+                      <Icon name="Trophy" className="text-primary" size={24} />
+                      <div>
+                        <p className="font-bold text-lg text-foreground">
+                          🎉 {game.winner.nickname}
+                        </p>
+                        <p className="text-sm text-muted-foreground">
+                          {game.timestamp.toLocaleString('ru-RU', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            year: 'numeric',
+                            hour: '2-digit',
+                            minute: '2-digit'
+                          })}
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-bold text-foreground">
-                        {game.color === 'red' ? '🔴 Красное' : game.color === 'black' ? '⚫ Чёрное' : '🟢 Зелёное'}
-                      </p>
-                      <p className="text-sm text-muted-foreground">
-                        {game.timestamp.toLocaleTimeString()}
-                      </p>
+                    <div className="text-right">
+                      <Badge className="bg-primary text-black font-bold text-lg px-4 py-2">
+                        {game.totalBank.toLocaleString()} ₽
+                      </Badge>
                     </div>
                   </div>
-                  <div className="text-right">
-                    {game.win ? (
-                      <Badge className="bg-accent text-white font-bold">
-                        +{game.amount} ₽
-                      </Badge>
-                    ) : (
-                      <Badge variant="secondary">Проигрыш</Badge>
-                    )}
+                  <div className="flex gap-4 text-sm text-muted-foreground">
+                    <span>Участников: {game.participantsCount}</span>
+                    <span>•</span>
+                    <span>Ставка победителя: {game.winner.bet.toLocaleString()} ₽</span>
                   </div>
                 </div>
               ))}
@@ -315,9 +291,9 @@ export default function Index() {
             <div className="space-y-4">
               <h3 className="text-xl font-bold text-primary">Режим работы</h3>
               <div className="space-y-2 text-foreground">
-                <p>🎰 Онлайн казино работает 24/7</p>
+                <p>🎰 Онлайн рулетка работает 24/7</p>
                 <p>📞 Поддержка: круглосуточно</p>
-                <p>💳 Вывод средств: 10:00 - 22:00</p>
+                <p>💬 Ответ в течение 5 минут</p>
               </div>
             </div>
           </div>
